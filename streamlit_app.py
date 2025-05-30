@@ -130,36 +130,62 @@ def render_tree_node(node: TreeNode, level: int = 0, search_results: List[TreeNo
         if is_highlighted:
             st.markdown(f"**🔍 Found: {node.name}**")
 
+def render_tree_node_explorer(node: TreeNode, level: int = 0, search_results: List[TreeNode] = None):
+    """Render tree nodes for explorer left pane. Only select, don't show details here."""
+    is_highlighted = search_results and node in search_results
+    indent = "　" * level
+    key = f"explorer_{node.id}_{level}"
+    if node.children:
+        # Expand/collapse logic
+        if st.button(("📁" if not node.expanded else "📂") + f" {indent}{node.name}", key=f"expand_{key}"):
+            node.expanded = not node.expanded
+        if node.expanded:
+            for child in node.children:
+                render_tree_node_explorer(child, level + 1, search_results)
+    else:
+        if st.button(f"📄 {indent}{node.name}", key=key):
+            st.session_state["selected_node"] = node.id
+    # Allow selecting parent nodes as well
+    if not node.children and st.session_state.get("selected_node") == node.id:
+        st.markdown(f"<span style='color: #4F8BF9;'>Selected</span>", unsafe_allow_html=True)
+    elif node.children and st.session_state.get("selected_node") == node.id:
+        st.markdown(f"<span style='color: #4F8BF9;'>Selected</span>", unsafe_allow_html=True)
+    # Allow selecting parent nodes for details
+    if node.children:
+        if st.button(f"Select {indent}{node.name}", key=f"select_{key}"):
+            st.session_state["selected_node"] = node.id
+
+def find_node_by_id(node: TreeNode, node_id: str) -> Optional[TreeNode]:
+    if node.id == node_id:
+        return node
+    for child in node.children:
+        found = find_node_by_id(child, node_id)
+        if found:
+            return found
+    return None
+
 def main():
     st.set_page_config(page_title="Hierarchical Data Visualizer", layout="wide")
-    
     st.title("🌳 Hierarchical Data Visualizer")
-    st.markdown("Interactive tree view with search functionality")
-    
-    # Initialize session state
+    st.markdown("Interactive tree view with file-explorer layout")
+
     if 'tree_data' not in st.session_state:
         st.session_state.tree_data = create_sample_data()
-    
-    # Sidebar for controls
+    if 'selected_node' not in st.session_state:
+        st.session_state.selected_node = st.session_state.tree_data.id
+
     with st.sidebar:
         st.header("🔧 Controls")
-        
-        # Search functionality
         st.subheader("🔍 Search")
         search_query = st.text_input("Search nodes:", placeholder="Enter search term...")
-        
         search_results = []
         if search_query:
             search_results = search_nodes(st.session_state.tree_data, search_query)
             st.write(f"Found {len(search_results)} results")
-            
-            # Show search results
             if search_results:
                 st.subheader("Search Results:")
                 for result in search_results:
                     st.write(f"• {result.name} ({result.category})")
-        
-        # Tree controls
         st.subheader("🌲 Tree Controls")
         if st.button("Expand All"):
             def expand_all(node):
@@ -168,7 +194,6 @@ def main():
                     expand_all(child)
             expand_all(st.session_state.tree_data)
             st.rerun()
-        
         if st.button("Collapse All"):
             def collapse_all(node):
                 node.expanded = False
@@ -176,38 +201,40 @@ def main():
                     collapse_all(child)
             collapse_all(st.session_state.tree_data)
             st.rerun()
-        
-        # Statistics
         st.subheader("📊 Statistics")
         def count_nodes(node):
             count = 1
             for child in node.children:
                 count += count_nodes(child)
             return count
-        
         total_nodes = count_nodes(st.session_state.tree_data)
         st.metric("Total Nodes", total_nodes)
-    
-    # Main content area
-    st.header("📋 Tree Structure")
-    
-    # Display the tree
-    with st.container():
-        render_tree_node(st.session_state.tree_data, search_results=search_results)
-    
-    # Instructions
+
+    # File explorer layout
+    left, right = st.columns([1, 2])
+    with left:
+        st.header("📁 Explorer")
+        render_tree_node_explorer(st.session_state.tree_data, search_results=search_results)
+    with right:
+        st.header("📄 Node Details")
+        selected_id = st.session_state.get("selected_node", st.session_state.tree_data.id)
+        selected_node = find_node_by_id(st.session_state.tree_data, selected_id)
+        if selected_node:
+            display_node_details(selected_node)
+        else:
+            st.info("Select a node from the explorer to view details.")
     with st.expander("ℹ️ How to use"):
         st.markdown("""
         ### Navigation:
         - **📁/📂 buttons**: Click to expand/collapse nodes with children
-        - **📄 Leaf nodes**: Click to view detailed information
+        - **Select**: Click a node or 'Select' button to view details in the right pane
         - **Search**: Use the sidebar search to find specific nodes
         - **Tree Controls**: Use expand/collapse all buttons in sidebar
         
         ### Node Information:
         Each node contains:
         - **3 text fields**: Name, Description, Category
-        - **5 float values**: Displayed as metrics when expanded/selected
+        - **5 float values**: Displayed as metrics when selected
         """)
 
 if __name__ == "__main__":
