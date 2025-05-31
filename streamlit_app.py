@@ -3,6 +3,7 @@ import pandas as pd
 import json
 from typing import Dict, List, Any, Optional
 import uuid
+import plotly.graph_objects as go
 
 # Sample data structure
 class TreeNode:
@@ -164,6 +165,12 @@ def find_node_by_id(node: TreeNode, node_id: str) -> Optional[TreeNode]:
             return found
     return None
 
+def get_all_nodes(node: TreeNode) -> List[TreeNode]:
+    nodes = [node]
+    for child in node.children:
+        nodes.extend(get_all_nodes(child))
+    return nodes
+
 def main():
     st.set_page_config(page_title="Hierarchical Data Visualizer", layout="wide")
     st.title("🌳 Hierarchical Data Visualizer")
@@ -223,6 +230,37 @@ def main():
             display_node_details(selected_node)
         else:
             st.info("Select a node from the explorer to view details.")
+
+    # Bottom anchored bar chart pane
+    st.markdown("---")
+    st.subheader("📊 Bar Chart: First Value of Each Node")
+    all_nodes = get_all_nodes(st.session_state.tree_data)
+    # Only show nodes that are visible in the explorer (expanded path)
+    def get_visible_nodes(node):
+        visible = [node]
+        if getattr(node, 'expanded', False):
+            for child in node.children:
+                visible.extend(get_visible_nodes(child))
+        return visible
+    visible_nodes = get_visible_nodes(st.session_state.tree_data)
+    # Highlight selected node
+    bar_colors = ["#4F8BF9" if n.id == selected_id else "#A3C1DA" for n in visible_nodes]
+    fig = go.Figure(data=[
+        go.Bar(
+            x=[n.name for n in visible_nodes],
+            y=[n.values[0] for n in visible_nodes],
+            marker_color=bar_colors
+        )
+    ])
+    fig.update_layout(
+        xaxis_title="Node Name",
+        yaxis_title="First Value",
+        showlegend=False,
+        margin=dict(l=40, r=40, t=40, b=40),
+        height=300
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
     with st.expander("ℹ️ How to use"):
         st.markdown("""
         ### Navigation:
